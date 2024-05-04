@@ -1,6 +1,7 @@
 import polars as pl
 import polars.selectors as cs
 
+
 class Bridge:
     def __init__(
         self,
@@ -44,10 +45,10 @@ class Bridge:
                 pl.when(pl.col(key).is_null())
                 .then(pl.col(f"{key}{self.comparison_suffix}"))
                 .otherwise(key)
-            ).str.to_lowercase()
+            ).str.to_titlecase()
             for key in self.group_by_columns
         ]
-        return pl.concat_str(*group_keys, separator="|").alias("group_keys")
+        return pl.concat_str(*group_keys, separator=" / ").alias("group_keys")
 
     def _get_expressions(self) -> tuple[pl.Expr, ...]:
         # Volume
@@ -152,3 +153,32 @@ class Bridge:
         )
 
         return effect_table.collect()
+
+    def write_effect_table(self, file_path: str) -> None:
+        effect_df = self.get_effect_table()
+        effect_df.write_excel(
+            workbook=file_path,
+            table_style="Table Style Light 1",
+            conditional_formats={
+            ("volume_effect", "rate_effect", "mix_effect", "new_effect", "old_effect"): {
+                "type": "3_color_scale",
+                "min_color": "#ff0000",
+                "mid_color": "#ffffff",
+                "max_color": "#73e656",
+                }
+            },
+            column_formats={
+                cs.ends_with("%"): "0.0%",
+                cs.ends_with("_effect"): "[Black]#,##0;[Black]-#,##0",
+                (pl.col("group_keys") | cs.ends_with("%")): {"right": 2},
+            },
+            freeze_panes=(1,0),
+            column_widths={
+                "group_keys":250,
+                "volume_effect": 100,
+                "rate_effect": 100,
+                "mix_effect": 100,
+                "new_effect": 100,
+                "old_effect": 100,
+            }
+        )

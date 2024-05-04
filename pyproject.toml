@@ -6,11 +6,16 @@ authors = [
     { name = "Miro Lavi", email = "info.l4v1@gmail.com" }
 ]
 dependencies = [
-    "polars>=0.20.23",
     "plotly>=5.22.0",
+    "polars>=0.20.23",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
+
+[project.optional-dependencies]
+xlsx = [
+    "xlsxwriter>=3.2.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -20,6 +25,7 @@ build-backend = "hatchling.build"
 managed = true
 dev-dependencies = [
     "jupyterlab>=4.1.8",
+    "xlsxwriter>=3.2.0",
 ]
 
 [tool.hatch.metadata]
