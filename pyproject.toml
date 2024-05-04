@@ -1,0 +1,29 @@
+[project]
+name = "l4v1"
+version = "0.0.2"
+description = "A Python library to simplify data-analytics tasks"
+authors = [
+    { name = "Miro Lavi", email = "info.l4v1@gmail.com" }
+]
+dependencies = [
+    "polars>=0.20.23",
+    "plotly>=5.22.0",
+]
+readme = "README.md"
+requires-python = ">= 3.8"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = [
+    "jupyterlab>=4.1.8",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["l4v1"]
