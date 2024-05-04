@@ -54,7 +54,7 @@ class Bridge:
         # Volume
         volume_new = pl.col(self.volume_metric_name)
         volume_comparison = pl.col(f"{self.volume_metric_name}{self.comparison_suffix}")
-        volume_diff = (volume_new - volume_comparison).alias(
+        volume_diff = (volume_new.fill_null(0) - volume_comparison.fill_null(0)).alias(
             f"{self.volume_metric_name}_diff"
         )
         volume_diff_pct = (volume_diff / volume_comparison).alias(
@@ -66,9 +66,9 @@ class Bridge:
         outcome_comparison = pl.col(
             f"{self.outcome_metric_name}{self.comparison_suffix}"
         )
-        outcome_diff = (outcome_new - outcome_comparison).alias(
-            f"{self.outcome_metric_name}_diff"
-        )
+        outcome_diff = (
+            outcome_new.fill_null(0) - outcome_comparison.fill_null(0)
+        ).alias(f"{self.outcome_metric_name}_diff")
         outcome_diff_pct = (outcome_diff / outcome_comparison).alias(
             f"{self.outcome_metric_name}_diff_%"
         )
@@ -78,7 +78,9 @@ class Bridge:
         rate_comparison = (outcome_comparison / volume_comparison).alias(
             f"rate{self.comparison_suffix}"
         )
-        rate_diff = (rate_new - rate_comparison).alias(f"rate_diff")
+        rate_diff = (rate_new.fill_null(0) - rate_comparison.fill_null(0)).alias(
+            f"rate_diff"
+        )
         rate_diff_pct = (rate_diff / rate_comparison).alias(f"rate_diff_%")
         rate_avg_comparison = outcome_comparison.sum() / volume_comparison.sum()
 
@@ -160,25 +162,48 @@ class Bridge:
             workbook=file_path,
             table_style="Table Style Light 1",
             conditional_formats={
-            ("volume_effect", "rate_effect", "mix_effect", "new_effect", "old_effect"): {
-                "type": "3_color_scale",
-                "min_color": "#ff0000",
-                "mid_color": "#ffffff",
-                "max_color": "#73e656",
+                (
+                    "volume_effect",
+                    "rate_effect",
+                    "mix_effect",
+                    "new_effect",
+                    "old_effect",
+                ): {
+                    "type": "3_color_scale",
+                    "min_color": "#ff0000",
+                    "mid_color": "#ffffff",
+                    "max_color": "#73e656",
                 }
             },
             column_formats={
-                cs.ends_with("%"): "0.0%",
-                cs.ends_with("_effect"): "[Black]#,##0;[Black]-#,##0",
-                (pl.col("group_keys") | cs.ends_with("%")): {"right": 2},
+                cs.matches("group_keys"): {"right": 2},
+                cs.ends_with(
+                    self.volume_metric_name, self.outcome_metric_name, "rate"
+                ): {
+                    "num_format": "#,##0",
+                    "font_color": "black",
+                },
+                cs.ends_with(f"{self.comparison_suffix}"): {
+                    "num_format": "#,##0",
+                    "font_color": "gray",
+                },
+                cs.ends_with("_diff"): {
+                    "num_format": "#,##0",
+                    "font_color": "black",
+                },
+                cs.ends_with("%"): {"num_format": "0.0%", "right": 2},
+                cs.ends_with("_effect"): {
+                    "num_format": "#,##0",
+                    "font_color": "black",
+                },
             },
-            freeze_panes=(1,0),
+            freeze_panes=(1, 0),
             column_widths={
-                "group_keys":250,
+                "group_keys": 250,
                 "volume_effect": 100,
                 "rate_effect": 100,
                 "mix_effect": 100,
                 "new_effect": 100,
                 "old_effect": 100,
-            }
+            },
         )
