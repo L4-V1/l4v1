@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 from typing import Callable
 
 
-class Bridge:
+class PVM:
     def __init__(
         self,
         df_primary: pl.LazyFrame | pl.DataFrame,
@@ -13,32 +13,32 @@ class Bridge:
         volume_metric_name: str,
         outcome_metric_name: str,
     ):
-        self.df_primary = (
+        self._df_primary = (
             df_primary.lazy() if isinstance(df_primary, pl.DataFrame) else df_primary
         )
-        self.df_comparison = (
+        self._df_comparison = (
             df_comparison.lazy()
             if isinstance(df_comparison, pl.DataFrame)
             else df_comparison
         )
-        self.group_by_columns = (
+        self._group_by_columns = (
             [group_by_columns]
             if isinstance(group_by_columns, str)
             else group_by_columns
         )
-        self.volume_metric_name = volume_metric_name
-        self.outcome_metric_name = outcome_metric_name
-        self.rate_metric_name = "Rate" if volume_metric_name[0].isupper() else "rate"
-        self.comparison_suffix = "_cmp"
+        self._volume_metric_name = volume_metric_name
+        self._outcome_metric_name = outcome_metric_name
+        self._rate_metric_name = "Rate" if volume_metric_name[0].isupper() else "rate"
+        self._comparison_suffix = "_cmp"
 
     def _group_dataframe(self, df: pl.LazyFrame) -> pl.LazyFrame:
         transformed_cols = [
             pl.col(col_name).cast(pl.Utf8).alias(col_name)
-            for col_name in self.group_by_columns
+            for col_name in self._group_by_columns
         ]
         agg_expressions = [
             pl.col(metric).sum().cast(pl.Float64)
-            for metric in [self.volume_metric_name, self.outcome_metric_name]
+            for metric in [self._volume_metric_name, self._outcome_metric_name]
         ]
         return df.group_by(transformed_cols).agg(agg_expressions)
 
@@ -46,45 +46,49 @@ class Bridge:
         group_keys = [
             (
                 pl.when(pl.col(key).is_null())
-                .then(pl.col(f"{key}{self.comparison_suffix}"))
+                .then(pl.col(f"{key}{self._comparison_suffix}"))
                 .otherwise(key)
             ).str.to_titlecase()
-            for key in self.group_by_columns
+            for key in self._group_by_columns
         ]
         return pl.concat_str(*group_keys, separator=" / ").alias("group_keys")
 
     def _get_expressions(self) -> tuple[pl.Expr, ...]:
         # Volume
-        volume_new = pl.col(self.volume_metric_name)
-        volume_comparison = pl.col(f"{self.volume_metric_name}{self.comparison_suffix}")
+        volume_new = pl.col(self._volume_metric_name)
+        volume_comparison = pl.col(
+            f"{self._volume_metric_name}{self._comparison_suffix}"
+        )
         volume_diff = (volume_new.fill_null(0) - volume_comparison.fill_null(0)).alias(
-            f"{self.volume_metric_name}_diff"
+            f"{self._volume_metric_name}_diff"
         )
         volume_diff_pct = (volume_diff / volume_comparison).alias(
-            f"{self.volume_metric_name}_diff_%"
+            f"{self._volume_metric_name}_diff_%"
         )
 
         # Outcome
-        outcome_new = pl.col(self.outcome_metric_name)
+        outcome_new = pl.col(self._outcome_metric_name)
         outcome_comparison = pl.col(
-            f"{self.outcome_metric_name}{self.comparison_suffix}"
+            f"{self._outcome_metric_name}{self._comparison_suffix}"
         )
         outcome_diff = (
             outcome_new.fill_null(0) - outcome_comparison.fill_null(0)
-        ).alias(f"{self.outcome_metric_name}_diff")
+        ).alias(f"{self._outcome_metric_name}_diff")
         outcome_diff_pct = (outcome_diff / outcome_comparison).alias(
-            f"{self.outcome_metric_name}_diff_%"
+            f"{self._outcome_metric_name}_diff_%"
         )
 
         # Rate
-        rate_new = (outcome_new / volume_new).alias(f"{self.rate_metric_name}")
+        rate_new = (outcome_new / volume_new).alias(f"{self._rate_metric_name}")
         rate_comparison = (outcome_comparison / volume_comparison).alias(
-            f"{self.rate_metric_name}{self.comparison_suffix}"
+            f"{self._rate_metric_name}{self._comparison_suffix}"
         )
         rate_diff = (rate_new.fill_null(0) - rate_comparison.fill_null(0)).alias(
-            f"{self.rate_metric_name}_diff"
+            f"{self._rate_metric_name}_diff"
         )
-        rate_diff_pct = (rate_diff / rate_comparison).alias(f"{self.rate_metric_name}_diff_%")
+        rate_diff_pct = (rate_diff / rate_comparison).alias(
+            f"{self._rate_metric_name}_diff_%"
+        )
         rate_avg_comparison = outcome_comparison.sum() / volume_comparison.sum()
 
         # Expressions for the bridge
@@ -136,9 +140,9 @@ class Bridge:
             old_expr,
         )
 
-    def get_effect_table(self) -> pl.DataFrame:
-        df_primary_grouped = self._group_dataframe(self.df_primary)
-        df_comparison_grouped = self._group_dataframe(self.df_comparison)
+    def get_table(self) -> pl.DataFrame:
+        df_primary_grouped = self._group_dataframe(self._df_primary)
+        df_comparison_grouped = self._group_dataframe(self._df_comparison)
 
         join_key_expression = self._get_join_key_expression()
 
@@ -146,21 +150,21 @@ class Bridge:
             df_primary_grouped.join(
                 df_comparison_grouped,
                 how="outer",
-                on=self.group_by_columns,
-                suffix=self.comparison_suffix,
+                on=self._group_by_columns,
+                suffix=self._comparison_suffix,
             )
             .select(
                 join_key_expression,
                 *self._get_expressions(),
             )
             .with_columns(cs.numeric().fill_nan(0).fill_null(0))
-            .sort(by=f"{self.outcome_metric_name}_diff", descending=True)
+            .sort(by=f"{self._outcome_metric_name}_diff", descending=True)
         )
 
         return effect_table.collect()
 
-    def write_effect_table(self, file_path: str) -> None:
-        effect_df = self.get_effect_table()
+    def write_xlsx_table(self, file_path: str) -> None:
+        effect_df = self.get_table()
         effect_df.write_excel(
             workbook=file_path,
             table_style="Table Style Light 1",
@@ -181,12 +185,14 @@ class Bridge:
             column_formats={
                 cs.matches("group_keys"): {"right": 2},
                 cs.ends_with(
-                    self.volume_metric_name, self.outcome_metric_name, self.rate_metric_name
+                    self._volume_metric_name,
+                    self._outcome_metric_name,
+                    self._rate_metric_name,
                 ): {
                     "num_format": "#,##0",
                     "font_color": "black",
                 },
-                cs.ends_with(f"{self.comparison_suffix}"): {
+                cs.ends_with(f"{self._comparison_suffix}"): {
                     "num_format": "#,##0",
                     "font_color": "gray",
                 },
@@ -211,8 +217,8 @@ class Bridge:
             },
         )
 
-    def _create_data_label(self,
-        value: float, previous_value: float, format_func: Callable
+    def _create_data_label(
+        self, value: float, previous_value: float, format_func: Callable
     ) -> str:
         formatted_value = format_func(value)
         if previous_value is not None:
@@ -222,7 +228,7 @@ class Bridge:
             return f"{formatted_value} ({formatted_growth})"
         return formatted_value
 
-    def _prep_data_for_impact_plot(
+    def _prep_data_for_waterfall_plot(
         self,
         impact_table: pl.DataFrame,
         format_data_labels: Callable,
@@ -231,14 +237,14 @@ class Bridge:
     ) -> tuple[list, list, list, list]:
         if format_data_labels is None:
             format_data_labels = lambda value: f"{value:,.0f}"
-        primary_total_label = primary_total_label or self.outcome_metric_name
+        primary_total_label = primary_total_label or self._outcome_metric_name
         comparison_total_label = (
-            comparison_total_label or f"COMPARISON {self.outcome_metric_name}"
+            comparison_total_label or f"COMPARISON {self._outcome_metric_name}"
         )
 
         x_labels, y_values, data_labels, measure_list = [], [], [], []
         outcome_comparison = impact_table.get_column(
-            f"{self.outcome_metric_name}{self.comparison_suffix}"
+            f"{self._outcome_metric_name}{self._comparison_suffix}"
         ).sum()
 
         x_labels.append(f"<b>{comparison_total_label}</b>")
@@ -256,7 +262,9 @@ class Bridge:
             impact_types = ["volume", "rate", "mix"]
 
         for impact_type in impact_types:
-            for key in impact_table.get_column("group_keys").unique().sort(descending=True):
+            for key in (
+                impact_table.get_column("group_keys").unique().sort(descending=True)
+            ):
                 impact_value = (
                     impact_table.filter(pl.col("group_keys") == key)
                     .get_column(f"{impact_type}_effect")
@@ -272,12 +280,14 @@ class Bridge:
             x_labels.append(f"<b>{impact_type.capitalize()} Impact Subtotal</b>")
             y_values.append(cumulative_sum)
             data_labels.append(
-                self._create_data_label(cumulative_sum, previous_value, format_data_labels)
+                self._create_data_label(
+                    cumulative_sum, previous_value, format_data_labels
+                )
             )
             measure_list.append("absolute")
             previous_value = cumulative_sum
 
-        outcome_new = impact_table.get_column(self.outcome_metric_name).sum()
+        outcome_new = impact_table.get_column(self._outcome_metric_name).sum()
         x_labels.append(f"<b>{primary_total_label}</b>")
         y_values.append(outcome_new)
         data_labels.append(
@@ -287,7 +297,7 @@ class Bridge:
 
         return x_labels, y_values, data_labels, measure_list
 
-    def impact_plot(
+    def waterfall_plot(
         self,
         primary_total_label: str = None,
         comparison_total_label: str = None,
@@ -303,13 +313,17 @@ class Bridge:
         plotly_trace_settings: dict[str, any] = None,
         plotly_layout_settings: dict[str, any] = None,
     ) -> go.Figure:
-
         # Convert format string to a formatting function
         formatter = lambda x: format_data_labels.format(x)
 
         # Prepare data for plotting
-        x_labels, y_values, data_labels, measure_list = self._prep_data_for_impact_plot(
-            self.get_effect_table(), formatter, primary_total_label, comparison_total_label
+        x_labels, y_values, data_labels, measure_list = (
+            self._prep_data_for_waterfall_plot(
+                self.get_table(),
+                formatter,
+                primary_total_label,
+                comparison_total_label,
+            )
         )
 
         # Create the plot
