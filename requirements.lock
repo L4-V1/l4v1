@@ -10,9 +10,9 @@
 -e file:.
 packaging==24.0
     # via plotly
-plotly==5.22.0
+plotly==5.20.0
     # via l4v1
-polars==0.20.23
+polars==0.20.19
     # via l4v1
 tenacity==8.2.3
     # via plotly
