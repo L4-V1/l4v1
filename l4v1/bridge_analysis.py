@@ -26,6 +26,7 @@ class Bridge:
         )
         self.volume_metric_name = volume_metric_name
         self.outcome_metric_name = outcome_metric_name
+        self.rate_metric_name = "Rate" if volume_metric_name[0].isupper() else "rate"
         self.comparison_suffix = "_cmp"
 
     def _group_dataframe(self, df: pl.LazyFrame) -> pl.LazyFrame:
@@ -74,14 +75,14 @@ class Bridge:
         )
 
         # Rate
-        rate_new = (outcome_new / volume_new).alias("rate")
+        rate_new = (outcome_new / volume_new).alias(f"{self.rate_metric_name}")
         rate_comparison = (outcome_comparison / volume_comparison).alias(
-            f"rate{self.comparison_suffix}"
+            f"{self.rate_metric_name}{self.comparison_suffix}"
         )
         rate_diff = (rate_new.fill_null(0) - rate_comparison.fill_null(0)).alias(
-            f"rate_diff"
+            f"{self.rate_metric_name}_diff"
         )
-        rate_diff_pct = (rate_diff / rate_comparison).alias(f"rate_diff_%")
+        rate_diff_pct = (rate_diff / rate_comparison).alias(f"{self.rate_metric_name}_diff_%")
         rate_avg_comparison = outcome_comparison.sum() / volume_comparison.sum()
 
         # Expressions for the bridge
@@ -178,7 +179,7 @@ class Bridge:
             column_formats={
                 cs.matches("group_keys"): {"right": 2},
                 cs.ends_with(
-                    self.volume_metric_name, self.outcome_metric_name, "rate"
+                    self.volume_metric_name, self.outcome_metric_name, self.rate_metric_name
                 ): {
                     "num_format": "#,##0",
                     "font_color": "black",
