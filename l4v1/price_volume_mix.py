@@ -5,13 +5,33 @@ from typing import Callable
 
 
 class PVM:
+    """
+    Provides tools to calculate and visualize the impacts of price, volume, and mix changes between two datasets.
+
+    This class takes two Polars data- or lazyframes having the same schema, one for the current period and one
+    for a comparison period, along with metadata about the datasets to perform grouping, calculations, and
+    visualizations on the price, volume, and mix effects.
+
+    Parameters:
+        df_primary (pl.LazyFrame | pl.DataFrame): The primary dataset for the current period.
+        df_comparison (pl.LazyFrame | pl.DataFrame): The comparison dataset for the period.
+        group_by_columns (str | List[str]): Column name(s) to use for grouping.
+        volume_column_name (str): The name of the column representing volume data, e.g quantities.
+        outcome_column_name (str): The name of the column representing outcome data, e.g. revenue or cost.
+
+    Methods:
+        get_table(): Computes a table summarizing the changes per group as well as the effects of price, volume, and mix changes.
+        write_xlsx_table(file_path): Writes the impact table to an Excel file with heatmap applied for the price, volume, mix effects.
+        waterfall_plot(): Generates a waterfall plot visualizing the effects from the computed table.
+    """
+
     def __init__(
         self,
         df_primary: pl.LazyFrame | pl.DataFrame,
         df_comparison: pl.LazyFrame | pl.DataFrame,
         group_by_columns: str | list[str],
-        volume_metric_name: str,
-        outcome_metric_name: str,
+        volume_column_name: str,
+        outcome_column_name: str,
     ):
         self._df_primary = (
             df_primary.lazy() if isinstance(df_primary, pl.DataFrame) else df_primary
@@ -26,9 +46,9 @@ class PVM:
             if isinstance(group_by_columns, str)
             else group_by_columns
         )
-        self._volume_metric_name = volume_metric_name
-        self._outcome_metric_name = outcome_metric_name
-        self._rate_metric_name = "Rate" if volume_metric_name[0].isupper() else "rate"
+        self._volume_column_name = volume_column_name
+        self._outcome_column_name = outcome_column_name
+        self._rate_metric_name = "Rate" if volume_column_name[0].isupper() else "rate"
         self._comparison_suffix = "_cmp"
 
     def _group_dataframe(self, df: pl.LazyFrame) -> pl.LazyFrame:
@@ -38,7 +58,7 @@ class PVM:
         ]
         agg_expressions = [
             pl.col(metric).sum().cast(pl.Float64)
-            for metric in [self._volume_metric_name, self._outcome_metric_name]
+            for metric in [self._volume_column_name, self._outcome_column_name]
         ]
         return df.group_by(transformed_cols).agg(agg_expressions)
 
@@ -51,31 +71,31 @@ class PVM:
             ).str.to_titlecase()
             for key in self._group_by_columns
         ]
-        return pl.concat_str(*group_keys, separator=" / ").alias("group_keys")
+        return pl.concat_str(*group_keys, separator=r" \ ").alias("group_keys")
 
     def _get_expressions(self) -> tuple[pl.Expr, ...]:
         # Volume
-        volume_new = pl.col(self._volume_metric_name)
+        volume_new = pl.col(self._volume_column_name)
         volume_comparison = pl.col(
-            f"{self._volume_metric_name}{self._comparison_suffix}"
+            f"{self._volume_column_name}{self._comparison_suffix}"
         )
         volume_diff = (volume_new.fill_null(0) - volume_comparison.fill_null(0)).alias(
-            f"{self._volume_metric_name}_diff"
+            f"{self._volume_column_name}_diff"
         )
         volume_diff_pct = (volume_diff / volume_comparison).alias(
-            f"{self._volume_metric_name}_diff_%"
+            f"{self._volume_column_name}_diff_%"
         )
 
         # Outcome
-        outcome_new = pl.col(self._outcome_metric_name)
+        outcome_new = pl.col(self._outcome_column_name)
         outcome_comparison = pl.col(
-            f"{self._outcome_metric_name}{self._comparison_suffix}"
+            f"{self._outcome_column_name}{self._comparison_suffix}"
         )
         outcome_diff = (
             outcome_new.fill_null(0) - outcome_comparison.fill_null(0)
-        ).alias(f"{self._outcome_metric_name}_diff")
+        ).alias(f"{self._outcome_column_name}_diff")
         outcome_diff_pct = (outcome_diff / outcome_comparison).alias(
-            f"{self._outcome_metric_name}_diff_%"
+            f"{self._outcome_column_name}_diff_%"
         )
 
         # Rate
@@ -141,6 +161,12 @@ class PVM:
         )
 
     def get_table(self) -> pl.DataFrame:
+        """
+        Generates a summary table for changes together with price, volume, and mix effects.
+
+        Returns:
+            pl.DataFrame: A dataframe containing grouped and calculated results showing the summary of changes as well as impacts of price, volume, and mix changes.
+        """
         df_primary_grouped = self._group_dataframe(self._df_primary)
         df_comparison_grouped = self._group_dataframe(self._df_comparison)
 
@@ -158,12 +184,20 @@ class PVM:
                 *self._get_expressions(),
             )
             .with_columns(cs.numeric().fill_nan(0).fill_null(0))
-            .sort(by=f"{self._outcome_metric_name}_diff", descending=True)
+            .sort(by=f"{self._outcome_column_name}_diff", descending=True)
         )
 
         return effect_table.collect()
 
     def write_xlsx_table(self, file_path: str) -> None:
+        """
+        Writes the impact analysis results to an Excel file with heatmap applied for the price, volume, and mix effect columns.
+
+        This method takes the table generated by get_table(), applies conditional formatting, and writes it to the specified Excel file path.
+
+        Parameters:
+            file_path (str): The path to the Excel file where the table will be saved.
+        """
         effect_df = self.get_table()
         effect_df.write_excel(
             workbook=file_path,
@@ -185,8 +219,8 @@ class PVM:
             column_formats={
                 cs.matches("group_keys"): {"right": 2},
                 cs.ends_with(
-                    self._volume_metric_name,
-                    self._outcome_metric_name,
+                    self._volume_column_name,
+                    self._outcome_column_name,
                     self._rate_metric_name,
                 ): {
                     "num_format": "#,##0",
@@ -234,17 +268,18 @@ class PVM:
         format_data_labels: Callable,
         primary_total_label: str,
         comparison_total_label: str,
+        skip_zero_change: bool,
     ) -> tuple[list, list, list, list]:
         if format_data_labels is None:
             format_data_labels = lambda value: f"{value:,.0f}"
-        primary_total_label = primary_total_label or self._outcome_metric_name
+        primary_total_label = primary_total_label or self._outcome_column_name
         comparison_total_label = (
-            comparison_total_label or f"COMPARISON {self._outcome_metric_name}"
+            comparison_total_label or f"COMPARISON {self._outcome_column_name}"
         )
 
         x_labels, y_values, data_labels, measure_list = [], [], [], []
         outcome_comparison = impact_table.get_column(
-            f"{self._outcome_metric_name}{self._comparison_suffix}"
+            f"{self._outcome_column_name}{self._comparison_suffix}"
         ).sum()
 
         x_labels.append(f"<b>{comparison_total_label}</b>")
@@ -270,12 +305,12 @@ class PVM:
                     .get_column(f"{impact_type}_effect")
                     .sum()
                 )
-                # if impact_value != 0:
-                x_labels.append(f"{key} ({impact_type[0]}.)".lower())
-                y_values.append(impact_value)
-                data_labels.append(format_data_labels(impact_value))
-                measure_list.append("relative")
-                cumulative_sum += impact_value
+                if not (skip_zero_change and impact_value == 0):
+                    x_labels.append(f"{key} ({impact_type[0]}.)".lower())
+                    y_values.append(impact_value)
+                    data_labels.append(format_data_labels(impact_value))
+                    measure_list.append("relative")
+                    cumulative_sum += impact_value
 
             x_labels.append(f"<b>{impact_type.capitalize()} Impact Subtotal</b>")
             y_values.append(cumulative_sum)
@@ -287,7 +322,7 @@ class PVM:
             measure_list.append("absolute")
             previous_value = cumulative_sum
 
-        outcome_new = impact_table.get_column(self._outcome_metric_name).sum()
+        outcome_new = impact_table.get_column(self._outcome_column_name).sum()
         x_labels.append(f"<b>{primary_total_label}</b>")
         y_values.append(outcome_new)
         data_labels.append(
@@ -302,6 +337,7 @@ class PVM:
         primary_total_label: str = None,
         comparison_total_label: str = None,
         format_data_labels: str = "{:,.0f}",
+        skip_zero_change: bool = True,
         title: str = None,
         color_increase: str = "#00AF00",
         color_decrease: str = "#FF0000",
@@ -313,6 +349,30 @@ class PVM:
         plotly_trace_settings: dict[str, any] = None,
         plotly_layout_settings: dict[str, any] = None,
     ) -> go.Figure:
+        """
+        Creates a waterfall plot visualizing the price, volume, and mix impacts.
+
+        This visualization helps in understanding how different factors have contributed to the overall change.
+
+        Parameters:
+            primary_total_label (str, optional): The label for the primary dataset's total in the plot.
+            comparison_total_label (str, optional): The label for the comparison dataset's total in the plot.
+            format_data_labels (str, optional): The format string for numbers in the plot.
+            skip_zero_change (bool, optional): Whether to skip zero changes in the plot visualization.
+            title (str, optional): Title of the plot.
+            color_increase (str, optional): Color for positive changes.
+            color_decrease (str, optional): Color for negative changes.
+            color_total (str, optional): Color for the total columns.
+            text_font_size (int, optional): Font size of the text in the plot.
+            plot_height (int, optional): The height of the plot.
+            plot_width (int, optional): The width of the plot.
+            plotly_template (str, optional): The Plotly template for styling the plot.
+            plotly_trace_settings (dict[str, any], optional): Additional settings for Plotly traces.
+            plotly_layout_settings (dict[str, any], optional): Additional settings for the Plotly layout.
+
+        Returns:
+            go.Figure: A Plotly Figure object representing the waterfall plot of the impacts.
+        """
         # Convert format string to a formatting function
         formatter = lambda x: format_data_labels.format(x)
 
@@ -323,6 +383,7 @@ class PVM:
                 formatter,
                 primary_total_label,
                 comparison_total_label,
+                skip_zero_change,
             )
         )
 
