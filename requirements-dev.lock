@@ -49,6 +49,7 @@ defusedxml==0.7.1
 exceptiongroup==1.2.1
     # via anyio
     # via ipython
+    # via pytest
 executing==2.0.1
     # via stack-data
 fastjsonschema==2.19.1
@@ -66,6 +67,8 @@ idna==3.7
     # via httpx
     # via jsonschema
     # via requests
+iniconfig==2.0.0
+    # via pytest
 ipykernel==6.29.4
     # via jupyterlab
 ipython==8.18.1
@@ -146,6 +149,7 @@ packaging==24.0
     # via jupyterlab-server
     # via nbconvert
     # via plotly
+    # via pytest
 pandocfilters==1.5.1
     # via nbconvert
 parso==0.8.4
@@ -156,6 +160,8 @@ platformdirs==4.2.1
     # via jupyter-core
 plotly==5.22.0
     # via l4v1
+pluggy==1.5.0
+    # via pytest
 polars==0.20.23
     # via l4v1
 prometheus-client==0.20.0
@@ -174,6 +180,7 @@ pycparser==2.22
 pygments==2.17.2
     # via ipython
     # via nbconvert
+pytest==8.2.0
 python-dateutil==2.9.0.post0
     # via arrow
     # via jupyter-client
@@ -223,6 +230,7 @@ tinycss2==1.3.0
     # via nbconvert
 tomli==2.0.1
     # via jupyterlab
+    # via pytest
 tornado==6.4
     # via ipykernel
     # via jupyter-client

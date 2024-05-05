@@ -26,6 +26,7 @@ managed = true
 dev-dependencies = [
     "jupyterlab>=4.1.8",
     "xlsxwriter>=3.2.0",
+    "pytest>=8.2.0",
 ]
 
 [tool.hatch.metadata]
