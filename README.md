@@ -9,7 +9,7 @@ pip install l4v1
 ```
 
 ## Usage
-Calculate price, volume, and mix conveniently, and visualize them in an Excel heatmap or a Plotly waterfall chart. Start by importing Polars to load the data:
+Calculate price, volume, and mix effects conveniently, and visualize them in an Excel heatmap or a Plotly waterfall chart. Start by importing Polars to load the data:
 
 ```python
 import polars as pl
