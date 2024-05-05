@@ -1,4 +1,4 @@
-name: Python Application Testing
+name: Run Pytest
 
 on:
   push:
@@ -21,11 +21,16 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install test dependencies
+    - name: Install Python packages and dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install . -e
-        python -m pip install polars plotly pytest
+        python -m pip install hatch
+        python -m pip install -e ."[dev]"
+
+    - name: Verify Python setup
+      run: |
+        python --version
+        pip list
 
     - name: Run pytest
       run: |
