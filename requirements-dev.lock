@@ -15,11 +15,11 @@ iniconfig==2.0.0
 packaging==24.0
     # via plotly
     # via pytest
-plotly==5.22.0
+plotly==5.20.0
     # via l4v1
 pluggy==1.5.0
     # via pytest
-polars==0.20.23
+polars==0.20.19
     # via l4v1
 pytest==8.2.0
 tenacity==8.2.3
