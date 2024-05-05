@@ -7,15 +7,11 @@ authors = [
 ]
 dependencies = [
     "plotly>=5.20.0",
-    "polars>=0.20.19",
+    "xlsxwriter>=3.2.0",
+    "polars>=0.20.23",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"
-
-[project.optional-dependencies]
-xlsx = [
-    "xlsxwriter>=3.2.0",
-]
 
 [build-system]
 requires = ["hatchling"]
