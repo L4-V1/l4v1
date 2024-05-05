@@ -21,11 +21,11 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install hatch
+    - name: Install test dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install hatch
+        python -m pip install polars plotly pytest
 
-    - name: Install dependencies and run tests using hatch
+    - name: Run pytest
       run: |
-        hatch env run pytest
+        python -m pytest
