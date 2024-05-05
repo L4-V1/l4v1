@@ -1,5 +1,7 @@
 import polars as pl
 import polars.selectors as cs
+import plotly.graph_objects as go
+from typing import Callable
 
 
 class Bridge:
@@ -208,3 +210,140 @@ class Bridge:
                 "old_effect": 100,
             },
         )
+
+    def _create_data_label(self,
+        value: float, previous_value: float, format_func: Callable
+    ) -> str:
+        formatted_value = format_func(value)
+        if previous_value is not None:
+            growth = value - previous_value
+            sign = "+" if growth >= 0 else ""
+            formatted_growth = f"{sign}{format_func(growth)}"
+            return f"{formatted_value} ({formatted_growth})"
+        return formatted_value
+
+    def _prep_data_for_impact_plot(
+        self,
+        impact_table: pl.DataFrame,
+        format_data_labels: Callable,
+        primary_total_label: str,
+        comparison_total_label: str,
+    ) -> tuple[list, list, list, list]:
+        if format_data_labels is None:
+            format_data_labels = lambda value: f"{value:,.0f}"
+        primary_total_label = primary_total_label or self.outcome_metric_name
+        comparison_total_label = (
+            comparison_total_label or f"COMPARISON {self.outcome_metric_name}"
+        )
+
+        x_labels, y_values, data_labels, measure_list = [], [], [], []
+        outcome_comparison = impact_table.get_column(
+            f"{self.outcome_metric_name}{self.comparison_suffix}"
+        ).sum()
+
+        x_labels.append(f"<b>{comparison_total_label}</b>")
+        y_values.append(outcome_comparison)
+        data_labels.append(f"<b>{format_data_labels(outcome_comparison)}</b>")
+        measure_list.append("absolute")
+
+        cumulative_sum = outcome_comparison
+        previous_value = outcome_comparison
+
+        impact_types = ["volume", "rate", "mix", "old", "new"]
+        if (impact_table.get_column("old_effect").sum() == 0) & (
+            impact_table.get_column("new_effect").sum() == 0
+        ):
+            impact_types = ["volume", "rate", "mix"]
+
+        for impact_type in impact_types:
+            for key in impact_table.get_column("group_keys").unique().sort(descending=True):
+                impact_value = (
+                    impact_table.filter(pl.col("group_keys") == key)
+                    .get_column(f"{impact_type}_effect")
+                    .sum()
+                )
+                # if impact_value != 0:
+                x_labels.append(f"{key} ({impact_type[0]}.)".lower())
+                y_values.append(impact_value)
+                data_labels.append(format_data_labels(impact_value))
+                measure_list.append("relative")
+                cumulative_sum += impact_value
+
+            x_labels.append(f"<b>{impact_type.capitalize()} Impact Subtotal</b>")
+            y_values.append(cumulative_sum)
+            data_labels.append(
+                self._create_data_label(cumulative_sum, previous_value, format_data_labels)
+            )
+            measure_list.append("absolute")
+            previous_value = cumulative_sum
+
+        outcome_new = impact_table.get_column(self.outcome_metric_name).sum()
+        x_labels.append(f"<b>{primary_total_label}</b>")
+        y_values.append(outcome_new)
+        data_labels.append(
+            f"<b>{self._create_data_label(outcome_new, outcome_comparison, format_data_labels)}</b>"
+        )
+        measure_list.append("total")
+
+        return x_labels, y_values, data_labels, measure_list
+
+    def impact_plot(
+        self,
+        primary_total_label: str = None,
+        comparison_total_label: str = None,
+        format_data_labels: str = "{:,.0f}",
+        title: str = None,
+        color_increase: str = "#00AF00",
+        color_decrease: str = "#FF0000",
+        color_total: str = "#F1F1F1",
+        text_font_size: int = 8,
+        plot_height: int = None,
+        plot_width: int = 750,
+        plotly_template: str = "plotly_white",
+        plotly_trace_settings: dict[str, any] = None,
+        plotly_layout_settings: dict[str, any] = None,
+    ) -> go.Figure:
+
+        # Convert format string to a formatting function
+        formatter = lambda x: format_data_labels.format(x)
+
+        # Prepare data for plotting
+        x_labels, y_values, data_labels, measure_list = self._prep_data_for_impact_plot(
+            self.get_effect_table(), formatter, primary_total_label, comparison_total_label
+        )
+
+        # Create the plot
+        fig = go.Figure(
+            go.Waterfall(
+                orientation="h",
+                measure=measure_list,
+                x=y_values,
+                y=x_labels,
+                text=data_labels,
+                textposition="auto",
+                textfont=dict(size=text_font_size),
+                increasing=dict(marker=dict(color=color_increase)),
+                decreasing=dict(marker=dict(color=color_decrease)),
+                totals=dict(
+                    marker=dict(color=color_total, line=dict(color="black", width=1))
+                ),
+            )
+        )
+
+        # Update layout with basic settings
+        layout_params = {
+            "title": title,
+            "height": plot_height if plot_height else len(x_labels) * 25 + 100,
+            "width": plot_width,
+            "template": plotly_template,
+        }
+
+        # Apply advanced settings if provided
+        if plotly_trace_settings:
+            fig.update_traces(plotly_trace_settings)
+        if plotly_layout_settings:
+            fig.update_layout(**plotly_layout_settings)
+        else:
+            fig.update_layout(**layout_params)
+
+        return fig
