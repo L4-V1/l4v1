@@ -10,7 +10,7 @@ dependencies = [
     "polars>=0.20.23",
 ]
 readme = "README.md"
-requires-python = ">= 3.8"
+requires-python = ">= 3.9"
 
 [project.optional-dependencies]
 xlsx = [
@@ -24,8 +24,6 @@ build-backend = "hatchling.build"
 [tool.rye]
 managed = true
 dev-dependencies = [
-    "jupyterlab>=4.1.8",
-    "xlsxwriter>=3.2.0",
     "pytest>=8.2.0",
 ]
 
