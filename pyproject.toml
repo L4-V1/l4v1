@@ -1,6 +1,6 @@
 [project]
 name = "l4v1"
-version = "0.2.0"
+version = "0.2.1"
 description = "A Python library to simplify data-analytics tasks"
 authors = [
     { name = "Miro Lavi", email = "info.l4v1@gmail.com" }
