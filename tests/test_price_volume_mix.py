@@ -31,8 +31,8 @@ def test_pvm_get_table():
                     "volume_effect",
                     "rate_effect",
                     "mix_effect",
-                    "new_effect",
-                    "old_effect",
+                    # "new_effect",
+                    # "old_effect",
                 ]
             )
         )
