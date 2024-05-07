@@ -112,33 +112,13 @@ class PVM:
         rate_avg_comparison = outcome_comparison.sum() / volume_comparison.sum()
 
         # Expressions for the bridge
-        rate = (rate_new - rate_comparison) * volume_new
-        volume = volume_diff * rate_avg_comparison
-        mix = (rate_comparison - rate_avg_comparison) * volume_diff
-
-        def effect_expression(expr: pl.Expr, name: str) -> pl.Expr:
-            return (
-                pl.when((outcome_comparison.is_null()) | (outcome_new.is_null()))
-                .then(pl.lit(0))
-                .otherwise(expr)
-            ).alias(f"{name}_effect")
-
-        rate_expr = effect_expression(rate, "rate")
-        volume_expr = effect_expression(volume, "volume")
-        mix_expr = effect_expression(mix, "mix")
-
-        new_expr = (
-            pl.when((outcome_comparison.is_null()) & (outcome_new.is_not_null()))
-            .then(outcome_new)
-            .otherwise(pl.lit(0))
-            .alias("new_effect")
-        )
-        old_expr = (
-            pl.when((outcome_new.is_null()) & (outcome_comparison.is_not_null()))
-            .then(outcome_comparison * -1)
-            .otherwise(pl.lit(0))
-            .alias("old_effect")
-        )
+        rate_effect = ((rate_new - rate_comparison) * volume_new).alias("rate_effect")
+        volume_effect = (volume_diff * rate_avg_comparison).alias("volume_effect")
+        mix_effect = (
+            pl.when(rate_comparison.is_null() | rate_comparison.is_nan())
+            .then((rate_new - rate_avg_comparison) * volume_diff)
+            .otherwise((rate_comparison - rate_avg_comparison) * volume_diff)
+        ).alias("mix_effect")
 
         return (
             volume_new,
@@ -153,11 +133,9 @@ class PVM:
             outcome_comparison,
             outcome_diff,
             outcome_diff_pct,
-            volume_expr,
-            rate_expr,
-            mix_expr,
-            new_expr,
-            old_expr,
+            volume_effect,
+            rate_effect,
+            mix_effect,
         )
 
     def get_table(self) -> pl.DataFrame:
@@ -207,8 +185,8 @@ class PVM:
                     "volume_effect",
                     "rate_effect",
                     "mix_effect",
-                    "new_effect",
-                    "old_effect",
+                    # "new_effect",
+                    # "old_effect",
                 ): {
                     "type": "3_color_scale",
                     "min_color": "#ff0000",
@@ -246,8 +224,8 @@ class PVM:
                 "volume_effect": 100,
                 "rate_effect": 100,
                 "mix_effect": 100,
-                "new_effect": 100,
-                "old_effect": 100,
+                # "new_effect": 100,
+                # "old_effect": 100,
             },
         )
 
@@ -290,11 +268,7 @@ class PVM:
         cumulative_sum = outcome_comparison
         previous_value = outcome_comparison
 
-        impact_types = ["volume", "rate", "mix", "old", "new"]
-        if (impact_table.get_column("old_effect").sum() == 0) & (
-            impact_table.get_column("new_effect").sum() == 0
-        ):
-            impact_types = ["volume", "rate", "mix"]
+        impact_types = ["volume", "rate", "mix"]
 
         for impact_type in impact_types:
             for key in (
