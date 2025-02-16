@@ -12,6 +12,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "jupyterlab>=4.3.5",
     "pytest>=8.3.4",
     "ruff>=0.9.6",
 ]
