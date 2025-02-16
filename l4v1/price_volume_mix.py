@@ -153,7 +153,7 @@ class PVM:
         effect_table = (
             df_primary_grouped.join(
                 df_comparison_grouped,
-                how="outer",
+                how="full",
                 on=self._group_by_columns,
                 suffix=self._comparison_suffix,
             )
