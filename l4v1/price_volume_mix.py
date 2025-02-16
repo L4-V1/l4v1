@@ -185,8 +185,6 @@ class PVM:
                     "volume_effect",
                     "rate_effect",
                     "mix_effect",
-                    # "new_effect",
-                    # "old_effect",
                 ): {
                     "type": "3_color_scale",
                     "min_color": "#ff0000",
@@ -221,11 +219,9 @@ class PVM:
             freeze_panes=(1, 0),
             column_widths={
                 "group_keys": 250,
-                "volume_effect": 100,
-                "rate_effect": 100,
-                "mix_effect": 100,
-                # "new_effect": 100,
-                # "old_effect": 100,
+                "volume_effect": 120,
+                "rate_effect": 120,
+                "mix_effect": 120,
             },
         )
 
