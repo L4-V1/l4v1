@@ -2,29 +2,16 @@
 name = "l4v1"
 version = "0.2.1"
 description = "A Python library to simplify data-analytics tasks"
-authors = [
-    { name = "Miro Lavi", email = "info.l4v1@gmail.com" }
-]
-dependencies = [
-    "plotly>=5.20.0",
-    "xlsxwriter>=3.2.0",
-    "polars>=0.20.23",
-]
 readme = "README.md"
-requires-python = ">= 3.10"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.rye]
-managed = true
-dev-dependencies = [
-    "pytest>=8.2.0",
+requires-python = ">=3.10.13"
+dependencies = [
+    "plotly>=6.0.0",
+    "polars>=1.22.0",
+    "xlsxwriter>=3.2.2",
 ]
 
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.hatch.build.targets.wheel]
-packages = ["l4v1"]
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+    "ruff>=0.9.6",
+]
