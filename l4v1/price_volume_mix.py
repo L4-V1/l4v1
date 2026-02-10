@@ -109,13 +109,20 @@ class PVM:
         rate_diff_pct = (rate_diff / rate_comparison).alias(
             f"{self._rate_metric_name}_diff_%"
         )
-        rate_avg_comparison = outcome_comparison.sum() / volume_comparison.sum()
+        rate_avg_comparison = (
+            pl.when(volume_comparison.sum() == 0)
+            .then(0.0)
+            .otherwise(outcome_comparison.sum() / volume_comparison.sum())
+        )
+
+        _is_bad = lambda expr: expr.is_null() | expr.is_nan() | expr.is_infinite()
 
         # Expressions for the bridge
-        rate_effect = ((rate_new - rate_comparison) * volume_new).alias("rate_effect")
         volume_effect = (volume_diff * rate_avg_comparison).alias("volume_effect")
         mix_effect = (
-            pl.when(rate_comparison.is_null() | rate_comparison.is_nan())
+            pl.when(_is_bad(rate_comparison) & _is_bad(rate_new))
+            .then(0.0)
+            .when(_is_bad(rate_comparison))
             .then((rate_new - rate_avg_comparison) * volume_diff)
             .otherwise((rate_comparison - rate_avg_comparison) * volume_diff)
         ).alias("mix_effect")
@@ -134,7 +141,6 @@ class PVM:
             outcome_diff,
             outcome_diff_pct,
             volume_effect,
-            rate_effect,
             mix_effect,
         )
 
@@ -150,6 +156,15 @@ class PVM:
 
         join_key_expression = self._get_join_key_expression()
 
+        _clean = lambda expr: (
+            pl.when(expr.is_nan() | expr.is_infinite())
+            .then(0.0)
+            .otherwise(expr)
+            .fill_null(0.0)
+        )
+
+        outcome_diff_col = f"{self._outcome_column_name}_diff"
+
         effect_table = (
             df_primary_grouped.join(
                 df_comparison_grouped,
@@ -161,8 +176,35 @@ class PVM:
                 join_key_expression,
                 *self._get_expressions(),
             )
-            .with_columns(cs.numeric().fill_nan(0).fill_null(0))
-            .sort(by=f"{self._outcome_column_name}_diff", descending=True)
+            # First: clean volume_effect and mix_effect so the residual is reliable
+            .with_columns(
+                _clean(pl.col("volume_effect")).alias("volume_effect"),
+                _clean(pl.col("mix_effect")).alias("mix_effect"),
+                _clean(pl.col(outcome_diff_col)).alias(outcome_diff_col),
+            )
+            # Derive rate_effect as residual — guarantees the decomposition identity
+            .with_columns(
+                (
+                    pl.col(outcome_diff_col)
+                    - pl.col("volume_effect")
+                    - pl.col("mix_effect")
+                ).alias("rate_effect")
+            )
+            # Final cleanup: replace any remaining NaN / ±inf / null in display columns
+            .with_columns(
+                pl.when(cs.float().is_nan() | cs.float().is_infinite())
+                .then(0.0)
+                .otherwise(cs.float())
+                .name.keep()
+                .fill_null(0.0)
+            )
+            .sort(by=outcome_diff_col, descending=True)
+            .select(
+                pl.all().exclude("volume_effect", "rate_effect", "mix_effect"),
+                pl.col("volume_effect"),
+                pl.col("rate_effect"),
+                pl.col("mix_effect"),
+            )
         )
 
         return effect_table.collect()
