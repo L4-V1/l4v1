@@ -5,11 +5,9 @@ on:
       - "v*"
 
 jobs:
-  # This job acts as the gatekeeper
   call-test-workflow:
     uses: ./.github/workflows/test.yml
 
-  # This job only runs if the gatekeeper passes
   publish:
     needs: call-test-workflow
     runs-on: ubuntu-latest
