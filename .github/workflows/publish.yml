@@ -1,0 +1,25 @@
+name: Publish to PyPI
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # This job acts as the gatekeeper
+  call-test-workflow:
+    uses: ./.github/workflows/test.yml
+
+  # This job only runs if the gatekeeper passes
+  publish:
+    needs: call-test-workflow
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Build and Publish
+        run: |
+          uv build
+          uv publish
