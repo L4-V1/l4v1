@@ -202,10 +202,14 @@ class PVM:
                 .name.keep()
                 .fill_null(0.0)
             )
+            .with_columns(
+                (pl.col(diff_col) - pl.col("volume_effect") - pl.col("rate_effect") - pl.col("mix_effect"))
+                .alias("remainder_effect")
+            )
             .sort(diff_col, descending=True)
             .select(
-                pl.all().exclude("volume_effect", "rate_effect", "mix_effect"),
-                "volume_effect", "rate_effect", "mix_effect",
+                pl.all().exclude("volume_effect", "rate_effect", "mix_effect", "remainder_effect"),
+                "volume_effect", "rate_effect", "mix_effect", "remainder_effect",
             )
             .collect()
         )

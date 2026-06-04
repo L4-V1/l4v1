@@ -24,7 +24,7 @@ def _assert_effects_sum_to_diff(table: pl.DataFrame) -> None:
     total_diff = table.get_column("outcome_diff").sum()
     effect_sum = (
         table.select(
-            pl.sum_horizontal(["volume_effect", "rate_effect", "mix_effect"])
+            pl.sum_horizontal(["volume_effect", "rate_effect", "mix_effect", "remainder_effect"])
         )
         .sum()
         .item()
@@ -534,5 +534,5 @@ class TestOutputStructure:
             {"group": ["A", "B"], "volume": [80, 180], "outcome": [400, 720]},
         )
         table = pvm.get_table()
-        expected = {"volume_effect", "rate_effect", "mix_effect", "outcome_diff", "group_keys"}
+        expected = {"volume_effect", "rate_effect", "mix_effect", "remainder_effect", "outcome_diff", "group_keys"}
         assert expected.issubset(set(table.columns))
