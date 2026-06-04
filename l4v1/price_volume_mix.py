@@ -92,6 +92,7 @@ class PVM:
         r_avg0 = pl.when(v0.sum() == 0).then(0.0).otherwise(o0.sum() / v0.sum())
 
         volume_effect = (v_diff * r_avg0).alias("volume_effect")
+        rate_effect = ((_sanitize(o / v) - _sanitize(o0 / v0)) * v0.fill_null(0)).alias("rate_effect")
         mix_effect = (
             pl.when(_is_invalid(r0) & _is_invalid(r))
             .then(0.0)
@@ -104,7 +105,7 @@ class PVM:
             v, v0, v_diff, v_diff_pct,
             r, r0, r_diff, r_diff_pct,
             o, o0, o_diff, o_diff_pct,
-            volume_effect, mix_effect,
+            volume_effect, rate_effect, mix_effect,
         )
 
     def _format_label(
@@ -190,12 +191,9 @@ class PVM:
             .select(self._join_key_expr(), *self._metric_exprs())
             .with_columns(
                 _sanitize(pl.col("volume_effect")).alias("volume_effect"),
+                _sanitize(pl.col("rate_effect")).alias("rate_effect"),
                 _sanitize(pl.col("mix_effect")).alias("mix_effect"),
                 _sanitize(pl.col(diff_col)).alias(diff_col),
-            )
-            .with_columns(
-                (pl.col(diff_col) - pl.col("volume_effect") - pl.col("mix_effect"))
-                .alias("rate_effect")
             )
             .with_columns(
                 pl.when(cs.float().is_nan() | cs.float().is_infinite())
@@ -204,10 +202,14 @@ class PVM:
                 .name.keep()
                 .fill_null(0.0)
             )
+            .with_columns(
+                (pl.col(diff_col) - pl.col("volume_effect") - pl.col("rate_effect") - pl.col("mix_effect"))
+                .alias("remainder_effect")
+            )
             .sort(diff_col, descending=True)
             .select(
-                pl.all().exclude("volume_effect", "rate_effect", "mix_effect"),
-                "volume_effect", "rate_effect", "mix_effect",
+                pl.all().exclude("volume_effect", "rate_effect", "mix_effect", "remainder_effect"),
+                "volume_effect", "rate_effect", "mix_effect", "remainder_effect",
             )
             .collect()
         )
