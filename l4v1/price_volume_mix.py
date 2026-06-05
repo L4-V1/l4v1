@@ -227,7 +227,7 @@ class PVM:
             workbook=file_path,
             table_style="Table Style Light 1",
             conditional_formats={
-                ("volume_effect", "rate_effect", "mix_effect"): {
+                ("volume_effect", "rate_effect", "mix_effect", "remainder_effect"): {
                     "type": "3_color_scale",
                     "min_color": "#ff0000",
                     "mid_color": "#ffffff",
@@ -254,6 +254,7 @@ class PVM:
                 "volume_effect": 120,
                 "rate_effect": 120,
                 "mix_effect": 120,
+                "remainder_effect": 120,
             },
         )
 
