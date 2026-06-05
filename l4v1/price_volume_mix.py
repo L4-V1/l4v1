@@ -92,7 +92,7 @@ class PVM:
         r_avg0 = pl.when(v0.sum() == 0).then(0.0).otherwise(o0.sum() / v0.sum())
 
         volume_effect = (v_diff * r_avg0).alias("volume_effect")
-        rate_effect = ((_sanitize(o / v) - _sanitize(o0 / v0)) * v0.fill_null(0)).alias("rate_effect")
+        rate_effect = (v.fill_null(0) * (_sanitize(o / v) - _sanitize(o0 / v0))).alias("rate_effect")
         mix_effect = (
             pl.when(_is_invalid(r0) & _is_invalid(r))
             .then(0.0)
