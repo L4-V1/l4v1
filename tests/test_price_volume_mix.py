@@ -21,6 +21,20 @@ def _make_pvm(primary: dict, comparison: dict) -> PVM:
 
 
 def _assert_effects_sum_to_diff(table: pl.DataFrame) -> None:
+    """Strict check: volume + rate + mix must equal outcome_diff (no remainder)."""
+    total_diff = table.get_column("outcome_diff").sum()
+    effect_sum = (
+        table.select(
+            pl.sum_horizontal(["volume_effect", "rate_effect", "mix_effect"])
+        )
+        .sum()
+        .item()
+    )
+    assert total_diff == pytest.approx(effect_sum, abs=1e-9)
+
+
+def _assert_effects_with_remainder_sum_to_diff(table: pl.DataFrame) -> None:
+    """Lenient check: volume + rate + mix + remainder must equal outcome_diff."""
     total_diff = table.get_column("outcome_diff").sum()
     effect_sum = (
         table.select(
@@ -102,7 +116,7 @@ class TestMissingGroups:
             {"group": ["A", "B"], "volume": [80, 180], "outcome": [400, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert table.height == 3
 
     def test_group_only_in_comparison(self):
@@ -112,7 +126,7 @@ class TestMissingGroups:
             {"group": ["A", "B"], "volume": [80, 180], "outcome": [400, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert table.height == 2
 
     def test_completely_disjoint_groups(self):
@@ -122,7 +136,7 @@ class TestMissingGroups:
             {"group": ["A", "B"], "volume": [80, 180], "outcome": [400, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert table.height == 4
 
 
@@ -139,7 +153,7 @@ class TestZeroDivision:
             {"group": ["A", "B"], "volume": [0, 180], "outcome": [0, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert not table.select(pl.col("volume_effect").is_nan().any()).item()
         assert not table.select(pl.col("rate_effect").is_nan().any()).item()
         assert not table.select(pl.col("mix_effect").is_nan().any()).item()
@@ -151,7 +165,7 @@ class TestZeroDivision:
             {"group": ["A", "B"], "volume": [80, 180], "outcome": [400, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert not table.select(pl.col("volume_effect").is_nan().any()).item()
         assert not table.select(pl.col("rate_effect").is_nan().any()).item()
         assert not table.select(pl.col("mix_effect").is_nan().any()).item()
@@ -163,7 +177,7 @@ class TestZeroDivision:
             {"group": ["A", "B"], "volume": [0, 180], "outcome": [0, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert not table.select(pl.col("volume_effect").is_nan().any()).item()
         assert not table.select(pl.col("rate_effect").is_nan().any()).item()
         assert not table.select(pl.col("mix_effect").is_nan().any()).item()
@@ -175,7 +189,7 @@ class TestZeroDivision:
             {"group": ["A", "B"], "volume": [0, 0], "outcome": [0, 0]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert not table.select(pl.col("volume_effect").is_nan().any()).item()
         assert not table.select(pl.col("rate_effect").is_nan().any()).item()
         assert not table.select(pl.col("mix_effect").is_nan().any()).item()
@@ -187,7 +201,7 @@ class TestZeroDivision:
             {"group": ["A", "B"], "volume": [0, 0], "outcome": [0, 0]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert table.get_column("volume_effect").sum() == 0
         assert table.get_column("rate_effect").sum() == 0
         assert table.get_column("mix_effect").sum() == 0
@@ -209,7 +223,7 @@ class TestZeroVolumeNonZeroOutcome:
             {"group": ["A", "B"], "volume": [0, 180], "outcome": [300, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
 
     def test_zero_volume_nonzero_outcome_primary_only(self):
         """Primary period has a group with zero volume but non-zero outcome."""
@@ -218,7 +232,7 @@ class TestZeroVolumeNonZeroOutcome:
             {"group": ["A", "B"], "volume": [100, 180], "outcome": [400, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
 
     def test_zero_volume_nonzero_outcome_comparison_only(self):
         """Comparison period has a group with zero volume but non-zero outcome."""
@@ -227,7 +241,7 @@ class TestZeroVolumeNonZeroOutcome:
             {"group": ["A", "B"], "volume": [0, 180], "outcome": [300, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
 
     def test_multiple_zero_volume_groups_with_outcome(self):
         """Multiple groups have zero volume but non-zero outcome in both periods."""
@@ -236,7 +250,7 @@ class TestZeroVolumeNonZeroOutcome:
             {"group": ["A", "B", "C"], "volume": [0, 0, 180], "outcome": [400, 250, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
 
     def test_all_groups_zero_volume_nonzero_outcome(self):
         """Every group has zero volume but non-zero outcome."""
@@ -245,7 +259,7 @@ class TestZeroVolumeNonZeroOutcome:
             {"group": ["A", "B"], "volume": [0, 0], "outcome": [300, 600]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +278,7 @@ class TestNonZeroVolumeZeroOutcome:
             {"group": ["A", "B"], "volume": [80, 180], "outcome": [0, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
 
     def test_zero_outcome_primary_only(self):
         """Outcome drops to zero in primary while volume remains."""
@@ -273,7 +287,7 @@ class TestNonZeroVolumeZeroOutcome:
             {"group": ["A", "B"], "volume": [80, 180], "outcome": [400, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
 
     def test_zero_outcome_comparison_only(self):
         """Outcome was zero in comparison, becomes non-zero in primary."""
@@ -282,7 +296,7 @@ class TestNonZeroVolumeZeroOutcome:
             {"group": ["A", "B"], "volume": [80, 180], "outcome": [0, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
 
     def test_all_groups_zero_outcome(self):
         """All groups have volume but zero outcome in both periods."""
@@ -291,7 +305,7 @@ class TestNonZeroVolumeZeroOutcome:
             {"group": ["A", "B"], "volume": [80, 180], "outcome": [0, 0]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert table.get_column("volume_effect").sum() == 0
         assert table.get_column("rate_effect").sum() == 0
         assert table.get_column("mix_effect").sum() == 0
@@ -303,7 +317,7 @@ class TestNonZeroVolumeZeroOutcome:
             {"group": ["A", "B", "C"], "volume": [80, 0, 180], "outcome": [0, 300, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
 
     def test_outcome_disappears_volume_remains(self):
         """Group had non-zero outcome in comparison, drops to zero in primary while volume persists."""
@@ -312,7 +326,7 @@ class TestNonZeroVolumeZeroOutcome:
             {"group": ["A", "B"], "volume": [100, 180], "outcome": [600, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
 
 
 # ---------------------------------------------------------------------------
@@ -327,7 +341,7 @@ class TestNullsAndSpecialValues:
             {"group": ["A", "B"], "volume": [80, 180], "outcome": [400, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert not table.select(pl.col("volume_effect").is_null().any()).item()
         assert not table.select(pl.col("rate_effect").is_null().any()).item()
         assert not table.select(pl.col("mix_effect").is_null().any()).item()
@@ -338,7 +352,7 @@ class TestNullsAndSpecialValues:
             {"group": ["A", "B"], "volume": [None, 180], "outcome": [None, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert not table.select(pl.col("volume_effect").is_null().any()).item()
 
     def test_negative_volumes(self):
@@ -348,7 +362,7 @@ class TestNullsAndSpecialValues:
             {"group": ["A", "B"], "volume": [80, 180], "outcome": [400, 720]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
 
     def test_negative_outcome(self):
         """Negative outcomes should decompose correctly."""
@@ -357,7 +371,7 @@ class TestNullsAndSpecialValues:
             {"group": ["A", "B"], "volume": [80, 180], "outcome": [400, -200]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +387,7 @@ class TestAggregation:
             {"group": ["A", "B", "B"], "volume": [80, 90, 90], "outcome": [400, 360, 360]},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert table.height == 2
 
     def test_many_groups(self):
@@ -385,7 +399,7 @@ class TestAggregation:
             {"group": groups, "volume": list(range(5, 5 + n)), "outcome": list(range(80, 80 + n))},
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert table.height == n
 
 
@@ -457,7 +471,7 @@ class TestMultiColumnGroupBy:
             outcome_column_name="outcome",
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
         assert table.height == 3
 
     def test_multi_column_partial_overlap(self):
@@ -480,7 +494,7 @@ class TestMultiColumnGroupBy:
             outcome_column_name="outcome",
         )
         table = pvm.get_table()
-        _assert_effects_sum_to_diff(table)
+        _assert_effects_with_remainder_sum_to_diff(table)
 
 
 # ---------------------------------------------------------------------------
